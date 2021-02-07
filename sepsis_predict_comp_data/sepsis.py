@@ -11,20 +11,20 @@ if not torch.cuda.is_available():
 # ---------------- 玄学部分 ---------------------
 
 dropout = 0.1
-clip = 0.2
+clip = 0.005  # 防止梯度爆炸的梯度保护临界值
 optim = 'Adam'
-log_interval = 700
 lr = 1e-3
-epochs = 100
-nhid = 40
-levels = 3
-kernel_size = 7
+epochs = 30  # 最大epoch
+nhid = 20  # 每个隐层的参数量
+levels = 3  # 时间卷积隐层数量  --上面这俩给大了就发散
+kernel_size = 7  # 卷积核尺寸
+log_interval = 1000  # 记录log的间隔
 
 # ------------------ 固定参数 -------------------
 
 input_size = 40
 output_size = 336
-batch_size = 100
+batch_size = 200
 
 seed = 6783
 model_version = 1
@@ -85,7 +85,7 @@ def train(_):
 		x, y = x.cuda(), y.cuda()
 		optimizer.zero_grad()
 		output = model(x)
-		loss = loss_function(output, y)
+		loss = loss_function(output, y) * batch_size
 		if torch.isnan(loss):
 			raise Exception("loss is nan")
 		total_loss += loss.item()
