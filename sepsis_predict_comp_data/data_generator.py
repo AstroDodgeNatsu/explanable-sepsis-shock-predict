@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 def read_psv(f, m):
 	lines = f.readlines()
-	b = len(m) - len(lines) - 1
+	b = len(m) - len(lines)
 	for i in range(1, len(lines)):
 		line = lines[i][:-1].split('|')
 		line = np.array(line, dtype=np.float32)
@@ -14,12 +14,15 @@ def read_psv(f, m):
 
 
 def nan_process(m, alg=0):
+	# 输入m矩阵尺寸为 (20000, 336, 41)
 	if alg == 0:
 		# fill NaN value with 0 
 		m[np.isnan(m)] = 0
 	elif alg == 1:
-		# TODO: fill NaN value with average
-		pass
+		# fill NaN value with col average
+		for i in range(m.shape[2]):
+			c_mean = np.nanmean(m[:, :, i])
+			m[:, :, i][np.isnan(m[:, :, i])] = c_mean
 	return m
 
 
@@ -27,11 +30,11 @@ def data_generator(dataset='B', nan_alg=0):
 	"""
 	读入数据并分割为训练集、验证集、测试集，默认使用setB
 
-	args:
+	Args:
 		dataset: 使用的数据集         'A'为竞赛数据集A，'B'为竞赛数据集B，'M'为MIMIC-III数据集
 		nan_alg: 处理空值使用的算法    0为填充0，1为填充平均值
 
-	note:
+	>> note:
 		setA数据文件索引范围1~20643，19000之后有序号缺失，共计20337个病人的记录，最长时间序列长度336
 			导出矩阵尺寸为 X:(20337, 336, 40) Y:(20337, 336)
 		setB数据文件索引范围100001~120000，共计20000个病人的记录，最长时间序列长度336

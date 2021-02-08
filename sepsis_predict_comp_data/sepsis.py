@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
+from tqdm import tqdm
 
 if not torch.cuda.is_available():
 	raise Exception("CUDA is not available")
@@ -11,14 +12,14 @@ if not torch.cuda.is_available():
 # ---------------- 玄学部分 ---------------------
 
 dropout = 0.1
-clip = 0.005  # 防止梯度爆炸的梯度保护临界值
+clip = 0.0  # 防止梯度爆炸的梯度保护临界值
 optim = 'Adam'
 lr = 1e-3
-epochs = 30  # 最大epoch
-nhid = 20  # 每个隐层的参数量
-levels = 3  # 时间卷积隐层数量  --上面这俩给大了就发散
-kernel_size = 7  # 卷积核尺寸
-log_interval = 1000  # 记录log的间隔
+epochs = 50  # 最大epoch
+nhid = 80  # 每个隐层的参数量
+levels = 3  # 时间卷积隐层数量
+kernel_size = 5  # 卷积核尺寸
+log_interval = 2000  # 记录log的间隔
 
 # ------------------ 固定参数 -------------------
 
@@ -26,16 +27,16 @@ input_size = 40
 output_size = 336
 batch_size = 200
 
+nan_alg = 1
+
 seed = 6783
 model_version = 1
 
 # -----------------------------------------------
 
 # data
-train_set, valid_set, test_set = data_generator()
-train_set.cuda()
-valid_set.cuda()
-test_set.cuda()
+train_set, valid_set, test_set = data_generator(nan_alg=nan_alg)
+train_set, valid_set, test_set = train_set.cuda(), valid_set.cuda(), test_set.cuda()
 
 # model
 torch.manual_seed(seed)
@@ -47,7 +48,8 @@ model.cuda()
 criterion = nn.CrossEntropyLoss()
 optimizer = getattr(torch.optim, optim)(model.parameters(), lr=lr)
 
-loss_function = nn.BCELoss()
+# loss_function = nn.BCELoss()
+loss_function = nn.MSELoss()
 # def loss_function(input, target):
 # 	o = input.flatten()
 # 	x = torch.stack((o, 1-o), dim=1)
@@ -57,18 +59,19 @@ loss_function = nn.BCELoss()
 def evaluate(X_data, name='Eval'):
 	model.eval()
 	eval_idx_list = np.arange(len(X_data), dtype="int32")
+	np.random.shuffle(eval_idx_list)
 	total_loss = 0.0
 	count = 0
 	with torch.no_grad():
-		for idx in eval_idx_list:
-			data_line = X_data[idx].transpose(0, 1).unsqueeze(dim=0)
+		while count <= len(X_data) - batch_size:
+			data_line = X_data[count: count + batch_size].transpose(1, 2)
 			x, y = Variable(data_line[:, :-1]), Variable(data_line[:, -1])
 			x, y = x.cuda(), y.cuda()
 			output = model(x)
 			loss = loss_function(output, y)
 			total_loss += loss.item()
 			count += output.size(0)
-		eval_loss = total_loss / count
+		eval_loss = total_loss / count * batch_size
 		print(name + " loss: {:.5f}".format(eval_loss))
 		return eval_loss
 
@@ -85,24 +88,23 @@ def train(_):
 		x, y = x.cuda(), y.cuda()
 		optimizer.zero_grad()
 		output = model(x)
-		loss = loss_function(output, y) * batch_size
+		loss = loss_function(output, y)
 		if torch.isnan(loss):
 			raise Exception("loss is nan")
 		total_loss += loss.item()
 		count += output.size(0)
-
 		if clip > 0:
 			torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
 		loss.backward()
 		optimizer.step()
 		if index % log_interval == 0:
-			cur_loss = total_loss / count
-			print("Epoch {:2d} | lr {:.5f} | loss {:.5f}".format(ep, lr, cur_loss))
+			cur_loss = total_loss / count * batch_size
+			print("Epoch {:2d} | lr {:.8f} | loss {:.6f}".format(ep, lr, cur_loss))
 			total_loss = 0.0
 			count = 0
 
 
-best_vloss = 1e8
+best_vloss = 1e4
 vloss_list = []
 model_name = "sepsis_predict_{0}.pt".format(model_version)
 for ep in range(1, epochs + 1):
