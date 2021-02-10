@@ -104,6 +104,24 @@ def train(_):
 			count = 0
 
 
+def extract():
+	count = 0
+	outputs = np.empty((0, 336))
+	with torch.no_grad():
+		data = test_set.transpose(1, 2)
+		while count <= len(test_set) - batch_size:
+			x = Variable(data[count: count + batch_size, :-1]).cuda()
+			output = model(x).cpu().numpy()
+			outputs = np.vstack((outputs, output))
+			count += batch_size
+	y = data[:, -1].cpu().numpy()
+	timeline = data[:, -2].cpu().numpy()
+	out = np.stack((timeline, y, outputs), axis=0)
+	out = np.swapaxes(out, axis1=0, axis2=1)
+	np.save("test_data", out)
+	return out
+
+
 best_vloss = 1e4
 vloss_list = []
 model_name = "sepsis_predict_{0}.pt".format(model_version)
@@ -124,5 +142,7 @@ for ep in range(1, epochs + 1):
 	vloss_list.append(vloss)
 
 print('-' * 89)
-model = torch.load(open(model_name, "rb"))
+model = torch.load(model_name)
 tloss = evaluate(test_set)
+
+# extract()
