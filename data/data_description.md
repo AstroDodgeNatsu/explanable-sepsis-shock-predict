@@ -1,3 +1,5 @@
+[原始网页](https://physionet.org/content/challenge-2019/1.0.0/)
+
 # Challenge Data
 
 Data used in the competition is sourced from ICU patients in three separate hospital systems. Data from two hospital systems will be publicly available; however, one data set will be censored and used for scoring. The data for each patient will be contained within a single pipe-delimited text file. Each file will have the same header and each row will represent a single hour's worth of data. Available patient co-variates consist of Demographics, Vital Signs, and Laboratory values, which are defined in the tables below.

@@ -118,6 +118,8 @@ def extract():
 	timeline = data[:, -2].cpu().numpy()
 	out = np.stack((timeline, y, outputs), axis=0)
 	out = np.swapaxes(out, axis1=0, axis2=1)
+	out[:, -1] *= 10
+	out[:, -1][out[:, -1] > 1] = 1
 	np.save("test_data", out)
 	return out
 
