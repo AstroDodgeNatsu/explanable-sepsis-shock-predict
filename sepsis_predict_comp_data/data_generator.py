@@ -72,6 +72,7 @@ def data_generator(dataset='B', nan_alg=0):
 			except:
 				print(file_name, " doesn't exist")
 			index += 1
+		data[:, -24:, :-1] = np.nan
 		data = nan_process(data, nan_alg)
 		data = torch.Tensor(data)
 		torch.save(data, "dataTensor.pt")

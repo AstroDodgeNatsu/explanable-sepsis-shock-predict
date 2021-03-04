@@ -30,7 +30,7 @@ batch_size = 200
 nan_alg = 1
 
 seed = 6783
-model_version = 1
+model_version = "2"
 
 # -----------------------------------------------
 
@@ -124,7 +124,7 @@ def extract():
 
 best_vloss = 1e4
 vloss_list = []
-model_name = "sepsis_predict_{0}.pt".format(model_version)
+model_name = "sepsis_predict_" + model_version + ".pt"
 for ep in range(1, epochs + 1):
 	train(ep)
 	vloss = evaluate(valid_set, name='Validation')
@@ -141,8 +141,11 @@ for ep in range(1, epochs + 1):
 
 	vloss_list.append(vloss)
 
-print('-' * 89)
+state_name = "sepsis_predict_state_" + model_version + ".pt"
+torch.save(model.state_dict(), state_name)
+
+print('-' * 90)
 model = torch.load(model_name)
 tloss = evaluate(test_set)
 
-# extract()
+extract()
