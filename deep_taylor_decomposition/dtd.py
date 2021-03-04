@@ -20,6 +20,7 @@ from torch.autograd import Variable
 sample_dir = "saliency_map_sample"
 test_size = 2000
 batch_size = 32
+heatmap_scale = 5000
 
 
 def test():
