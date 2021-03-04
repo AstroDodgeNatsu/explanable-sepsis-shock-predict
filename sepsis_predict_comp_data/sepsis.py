@@ -30,7 +30,7 @@ batch_size = 200
 nan_alg = 1
 
 seed = 6783
-model_version = "1"
+model_version = "2"
 
 # -----------------------------------------------
 
@@ -148,4 +148,4 @@ print('-' * 90)
 model = torch.load(model_name)
 tloss = evaluate(test_set)
 
-# extract()
+extract()
