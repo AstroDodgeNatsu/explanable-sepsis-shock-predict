@@ -15,7 +15,7 @@ dropout = 0.1
 clip = 0.0  # 防止梯度爆炸的梯度保护临界值
 optim = 'Adam'
 lr = 1e-3
-epochs = 50  # 最大epoch
+epochs = 100  # 最大epoch
 nhid = 40  # 每个隐层的参数量
 levels = 3  # 时间卷积隐层数量
 kernel_size = 5  # 卷积核尺寸
@@ -30,7 +30,7 @@ batch_size = 200
 nan_alg = 1
 
 seed = 6783
-model_version = "3"
+model_version = "4"
 
 # -----------------------------------------------
 

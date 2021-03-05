@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import pdb
 from collections import OrderedDict
 from .resnet import BasicBlock, Bottleneck
+from sepsis_predict_comp_data.tcn import Chomp1d
 
 
 def model_flattening(module_tree):
@@ -83,7 +84,11 @@ class ActivationStoringNet(nn.Module):
             else:
                 module.activation = activation
                 module_stack.append(module)
-                activation = module(activation)
+                if isinstance(module, nn.Linear):
+                    activation = module(activation.transpose(1, 2))
+                    activation = activation.transpose(1, 2)
+                else:
+                    activation = module(activation)
                 if isinstance(module, nn.AdaptiveAvgPool2d):
                     activation = activation.view(activation.size(0), -1)
 
@@ -110,6 +115,9 @@ class DTD(nn.Module):
                 elif isinstance(module, nn.Conv2d):
                     activation = module.activation
                     R = self.backprop_conv_input(activation, module, R)
+                elif isinstance(module, nn.Conv1d):
+                    activation = module.activation
+                    R = self.backprop_conv1d_input(activation, module, R)
                 else:
                     raise RuntimeError(f'{type(module)} layer is invalid initial layer type')
             elif isinstance(module, BasicBlock):
@@ -174,6 +182,9 @@ class DTD(nn.Module):
         elif isinstance(module, nn.Conv2d):
             R = self.backprop_conv(activation, module, R)
             return R
+        elif isinstance(module, nn.Conv1d):
+            R = self.backprop_conv1d(activation, module, R)
+            return R
         elif isinstance(module, nn.BatchNorm2d):
             R = self.backprop_bn(R)
             return R
@@ -189,14 +200,26 @@ class DTD(nn.Module):
         elif isinstance(module, nn.Dropout):
             R = self.backprop_dropout(R)
             return R
+        elif isinstance(module, nn.Softmax):
+            R = self.backprop_softmax(R)
+            return R
+        elif isinstance(module, Chomp1d):
+            R = self.backprop_chomp1d(R)
+            return R
         else:
-            raise RuntimeError(f"{type(module)} can not handled currently")
+            R = self.backprop_chomp1d(R)
+            return R
+            # raise RuntimeError(f"{type(module)} can not handled currently")
 
     def backprop_dense(self, activation, module, R):
         W = torch.clamp(module.weight, min=0)
-        Z = torch.mm(activation, torch.transpose(W, 0, 1)) + 1e-9
+        pw = nn.ZeroPad2d(padding=(0, max(R.shape)-W.shape[1], 0,  max(R.shape)-W.shape[0]))
+        W = pw(W)
+        pa = nn.ZeroPad2d(padding=(0,  max(R.shape)-activation.shape[2], 0,  max(R.shape)-activation.shape[1]))
+        activation = pa(activation)
+        Z = torch.mm(activation.squeeze(0), torch.transpose(W, 0, 1)) + 1e-9
         S = R / Z
-        C = torch.mm(S, W)
+        C = torch.mm(S.squeeze(0), W)
         R = activation * C
 
         return R
@@ -223,6 +246,26 @@ class DTD(nn.Module):
 
         return R
 
+    def backprop_conv1d(self, activation, module, R):
+        stride, padding, kernel = module.stride, module.padding, module.kernel_size
+        output_padding = \
+            activation.size(2) - ((R.size(1) - 1) * stride[0] - 2 * padding[0] + kernel[0])
+        W = torch.clamp(module.weight, min=0)
+        Z = F.conv1d(activation, W, stride=stride, padding=padding) + 1e-9
+        Z = Z[:, :, int(output_padding/2):-int(output_padding/2)]
+        pz = nn.ZeroPad2d((0, max(R.shape)-Z.shape[2], 0, max(R.shape)-Z.shape[1]))
+        Z = pz(Z)
+        S = R / Z
+        S = S[:, :W.shape[1]]
+        C = F.conv_transpose1d(S, W, stride=stride, padding=2, output_padding=0)
+        pa = nn.ZeroPad2d((0, max(R.shape)-activation.shape[2], 0, max(R.shape)-activation.shape[1]))
+        activation = pa(activation)
+        C = pa(C)
+        R = activation * C
+
+        return R
+
+
     def backprop_conv(self, activation, module, R):
         stride, padding, kernel = module.stride, module.padding, module.kernel_size
         output_padding = activation.size(2) - ((R.size(2) - 1) * stride[0] \
@@ -232,6 +275,35 @@ class DTD(nn.Module):
         S = R / Z
         C = F.conv_transpose2d(S, W, stride=stride, padding=padding, output_padding=output_padding)
         R = activation * C
+
+        return R
+
+    def backprop_conv1d_input(self, activation, module, R):
+        stride, padding, kernel = module.stride, module.padding, module.kernel_size
+        output_padding = \
+            activation.size(2) - ((R.size(2) - 1) * stride[0] - 2 * padding[0] + kernel[0])
+
+        W_L = torch.clamp(module.weight, min=0)
+        W_H = torch.clamp(module.weight, max=0)
+
+        L = torch.ones_like(activation, dtype=activation.dtype) * self.lowest
+        H = torch.ones_like(activation, dtype=activation.dtype) * self.highest
+
+        Z_O = F.conv1d(activation, module.weight, stride=stride, padding=padding)
+        Z_L = F.conv1d(L, W_L, stride=stride, padding=padding)
+        Z_H = F.conv1d(H, W_H, stride=stride, padding=padding)
+
+        Z = Z_O - Z_L - Z_H + 1e-9
+        pz = nn.ZeroPad2d((0, 0, 0, 336-40))
+        Z = pz(Z[:, :, 2:-2])
+        S = R / Z
+        S = S[:, :40]
+
+        C_O = F.conv_transpose1d(S, module.weight, stride=stride, padding=2, output_padding=0)
+        C_L = F.conv_transpose1d(S, W_L, stride=stride, padding=2, output_padding=0)
+        C_H = F.conv_transpose1d(S, W_H, stride=stride, padding=2, output_padding=0)
+
+        R = activation * C_O - L * C_L - H * C_H
 
         return R
 
@@ -300,3 +372,9 @@ class DTD(nn.Module):
         R1 = activation1 * S
 
         return (R0, R1)
+
+    def backprop_softmax(self, R):
+        return R
+
+    def backprop_chomp1d(self, R):
+        return R
