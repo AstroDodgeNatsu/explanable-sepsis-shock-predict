@@ -67,11 +67,11 @@ class TCN(nn.Module):
 		super(TCN, self).__init__()
 		self.tcn = TemporalConvNet(input_size, num_channels, kernel_size=kernel_size, dropout=dropout)
 		self.linear = nn.Linear(num_channels[-1], output_size)
-		# self.softmax = nn.Softmax()
+		self.softmax = nn.Softmax()
 
 	def forward(self, x):
 		# x needs to have dimension (N, C, L) in order to be passed into CNN
 		output = self.tcn(x)
 		o = self.linear(output[:, :, -1])
-		# o = self.softmax(o)
+		o = self.softmax(o)
 		return o

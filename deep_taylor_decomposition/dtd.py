@@ -62,7 +62,7 @@ def test():
 
 			logging.info('sample saliency map generation')
 			saliency_map = DTD(module_stack, output, 336, 'TCN')
-			saliency_map = torch.sum(saliency_map, dim=1)
+			# saliency_map = torch.sum(saliency_map, dim=1)
 			saliency_map_sample = saliency_map[0].detach().numpy()
 			saliency_map_sample = np.maximum(0, saliency_map_sample) * 255 * heatmap_scale
 			saliency_map_sample = np.minimum(255, saliency_map_sample)

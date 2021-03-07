@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
 from tqdm import tqdm
+from time import time
 
 if not torch.cuda.is_available():
 	raise Exception("CUDA is not available")
@@ -15,8 +16,8 @@ dropout = 0.1
 clip = 0.0  # 防止梯度爆炸的梯度保护临界值
 optim = 'Adam'
 lr = 1e-3
-epochs = 100  # 最大epoch
-nhid = 40  # 每个隐层的参数量
+epochs = 50  # 最大epoch
+nhid = 80  # 每个隐层的参数量
 levels = 3  # 时间卷积隐层数量
 kernel_size = 5  # 卷积核尺寸
 log_interval = 2000  # 记录log的间隔
@@ -30,7 +31,7 @@ batch_size = 200
 nan_alg = 1
 
 seed = 6783
-model_version = "4"
+model_version = "5"
 
 # -----------------------------------------------
 
@@ -127,6 +128,7 @@ def extract():
 best_vloss = 1e4
 vloss_list = []
 model_name = "sepsis_predict_" + model_version + ".pt"
+t0 = time()
 for ep in range(1, epochs + 1):
 	train(ep)
 	vloss = evaluate(valid_set, name='Validation')
@@ -143,11 +145,14 @@ for ep in range(1, epochs + 1):
 
 	vloss_list.append(vloss)
 
-state_name = "sepsis_predict_state_" + model_version + ".pt"
-torch.save(model.state_dict(), state_name)
+# state_name = "sepsis_predict_state_" + model_version + ".pt"
+# torch.save(model.state_dict(), state_name)
 
 print('-' * 90)
 model = torch.load(model_name)
 tloss = evaluate(test_set)
+
+t1 = time()
+print('time cost: {:.2f}s'.format(t1 - t0))
 
 extract()
